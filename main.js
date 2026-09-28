@@ -6,6 +6,15 @@ let mainWindow = null;
 let currentChildProcess = null;
 
 function createWindow() {
+  const iconPath = path.join(__dirname, "assets", "icons", "icon.png");
+  if (process.platform === "darwin" && app.dock) {
+    try {
+      app.dock.setIcon(iconPath);
+    } catch (e) {
+      console.error("Dock icon error:", e);
+    }
+  }
+
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 860,
@@ -14,6 +23,7 @@ function createWindow() {
     backgroundColor: "#0d0f14",
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 18, y: 18 },
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

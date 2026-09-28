@@ -27,6 +27,7 @@
       "target": [
         "dmg"
       ],
+      "icon": "assets/icons/icon.icns",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },
