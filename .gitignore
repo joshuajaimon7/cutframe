@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Distribution & Build
+dist/
+build/
+release/
+
+# Media and Output Cache
+app_output/
+podcast_output/
+test_output/
+test_app_run/
+*.mp4
+*.part
+*.m4a
+*.wav
+*.aiff
+*.jpg
+*.jpeg
+*.png
+!assets/icons/*.png
+
+# Sensitive & System Files
+cookies.txt
+.DS_Store
+.env
+*.log

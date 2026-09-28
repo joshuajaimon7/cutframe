@@ -1,0 +1,51 @@
+{
+  "name": "cutframe",
+  "productName": "Cutframe",
+  "version": "1.0.0",
+  "description": "Professional AI 9:16 Vertical Repurposing Studio",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg"
+  },
+  "keywords": [
+    "ai",
+    "video",
+    "shorts",
+    "reels",
+    "podcast",
+    "clipper",
+    "davinci"
+  ],
+  "author": "Joshua Jaimon",
+  "license": "MIT",
+  "build": {
+    "appId": "com.cutframe.studio",
+    "productName": "Cutframe",
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Cutframe Studio Installer"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "engine.py",
+      "tools/**/*",
+      "assets/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}
