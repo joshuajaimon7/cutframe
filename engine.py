@@ -23,9 +23,24 @@ import numpy as np
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-FFMPEG_BIN = "/opt/homebrew/bin/ffmpeg"
+import shutil
+
+def find_ffmpeg():
+    bundled = Path(__file__).parent / "bin" / "ffmpeg"
+    if bundled.exists() and os.access(bundled, os.X_OK):
+        return str(bundled)
+    which_ffmpeg = shutil.which("ffmpeg")
+    if which_ffmpeg:
+        return which_ffmpeg
+    for p in ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]:
+        if os.path.exists(p):
+            return p
+    return "ffmpeg"
+
+FFMPEG_BIN = find_ffmpeg()
 ASSETS_DIR = Path(__file__).parent / "assets" / "broll"
 SFX_DIR = Path(__file__).parent / "assets" / "sfx"
+
 
 # System Fonts for Multilingual Typography
 FONTS = {
@@ -212,13 +227,30 @@ def transcribe_multilingual(video_path, model_name="tiny", lang_mode="auto"):
     - to_ml, to_hi, to_es, etc.: Translates any spoken audio into the specified target language subtitles.
     """
     import whisper
-    emit_status("transcribe", 30, f"Loading Multilingual Whisper ({model_name}) AI model...")
-    model = whisper.load_model(model_name)
+    bundled_model = Path(__file__).parent / "models" / f"{model_name}.pt"
+    if not bundled_model.exists():
+        bundled_model = Path(__file__).parent / "models" / "base.pt"
+
+    if bundled_model.exists():
+        emit_status("transcribe", 30, f"Loading Bundled Offline Model ({bundled_model.name})...")
+        model = whisper.load_model(str(bundled_model))
+    else:
+        emit_status("transcribe", 30, f"Loading Multilingual Whisper ({model_name}) AI model...")
+        model = whisper.load_model(model_name)
     
     task = "translate" if lang_mode == "to_en" else "transcribe"
     emit_status("transcribe", 45, f"Running AI speech transcription ({task})...")
     
-    result = model.transcribe(str(video_path), task=task, word_timestamps=True, fp16=False)
+    # Precision alignment settings: condition_on_previous_text=False prevents cumulative timestamp drift
+    result = model.transcribe(
+        str(video_path),
+        task=task,
+        word_timestamps=True,
+        fp16=False,
+        condition_on_previous_text=False,
+        temperature=0.0,
+        no_speech_threshold=0.5
+    )
     detected_lang = result.get("language", "en")
     
     # Target Language Translation (e.g. English audio -> Malayalam/Hindi/Spanish subtitles)
@@ -743,12 +775,13 @@ def render_clip(input_video, start_time, duration, output_path, words, mode="ful
                     frame_bytes = empty_frame_buffer
                     if active_card:
                         c_idx = active_card["card_idx"]
-                        for a_idx, w in enumerate(active_card["words"]):
-                            if w["start"] <= t <= w["end"]:
-                                frame_bytes = card_buffers.get((c_idx, a_idx), empty_frame_buffer)
-                                break
-                        else:
-                            frame_bytes = card_buffers.get((c_idx, 0), empty_frame_buffer)
+                        words_in_card = active_card["words"]
+                        active_a_idx = 0
+                        # Latch onto the current or most recently spoken word; never jump backwards
+                        for a_idx, w in enumerate(words_in_card):
+                            if t >= w["start"]:
+                                active_a_idx = a_idx
+                        frame_bytes = card_buffers.get((c_idx, active_a_idx), empty_frame_buffer)
 
                     proc.stdin.write(frame_bytes)
             except (BrokenPipeError, IOError):
