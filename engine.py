@@ -187,22 +187,65 @@ def download_video(url, output_dir):
     emit_status("download", 25, "Download complete!")
     return files[0]
 
+def translate_text(text, target_lang="ml"):
+    import urllib.request
+    import urllib.parse
+    clean_text = text.strip()
+    if not clean_text:
+        return text
+    url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" + target_lang + "&dt=t&q=" + urllib.parse.quote(clean_text)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as response:
+            res = json.loads(response.read().decode("utf-8"))
+            translated = "".join([part[0] for part in res[0] if part[0]])
+            return translated
+    except Exception as e:
+        print(f"[!] Translation fallback error: {e}", file=sys.stderr)
+        return text
+
 def transcribe_multilingual(video_path, model_name="tiny", lang_mode="auto"):
     """
     Multilingual transcription & translation using Whisper.
     - auto: Keeps native language (Malayalam, Hindi, Tamil, English, etc.)
     - to_en: Translates any spoken language into English subtitles.
+    - to_ml, to_hi, to_es, etc.: Translates any spoken audio into the specified target language subtitles.
     """
     import whisper
     emit_status("transcribe", 30, f"Loading Multilingual Whisper ({model_name}) AI model...")
     model = whisper.load_model(model_name)
     
     task = "translate" if lang_mode == "to_en" else "transcribe"
-    emit_status("transcribe", 45, f"Running AI {task} on speech audio...")
+    emit_status("transcribe", 45, f"Running AI speech transcription ({task})...")
     
     result = model.transcribe(str(video_path), task=task, word_timestamps=True, fp16=False)
     detected_lang = result.get("language", "en")
-    emit_status("transcribe", 60, f"Speech processed! (Language detected: {detected_lang.upper()})")
+    
+    # Target Language Translation (e.g. English audio -> Malayalam/Hindi/Spanish subtitles)
+    if lang_mode.startswith("to_") and lang_mode != "to_en":
+        target_code = lang_mode.replace("to_", "").lower()
+        emit_status("transcribe", 55, f"Translating subtitles to {target_code.upper()}...")
+        for seg in result.get("segments", []):
+            orig_text = seg.get("text", "")
+            if not orig_text.strip():
+                continue
+            translated = translate_text(orig_text, target_lang=target_code)
+            words = translated.strip().split()
+            if words:
+                seg_dur = max(0.2, seg["end"] - seg["start"])
+                step = seg_dur / len(words)
+                new_words = []
+                for i, tw in enumerate(words):
+                    new_words.append({
+                        "word": tw,
+                        "start": seg["start"] + i * step,
+                        "end": seg["start"] + (i + 1) * step
+                    })
+                seg["words"] = new_words
+                seg["text"] = translated
+        detected_lang = target_code
+
+    emit_status("transcribe", 60, f"Speech processed! (Language: {detected_lang.upper()})")
     return result, detected_lang
 
 def apply_slang_cleaning(word):
@@ -748,7 +791,7 @@ def main():
     parser.add_argument("--duration", type=float, default=30.0, help="Clip duration in seconds")
     parser.add_argument("--mode", default="full_bleed", choices=["full_bleed", "split_screen", "blur"], help="Framing mode")
     parser.add_argument("--style", default="luxury_doc", choices=["luxury_doc", "kinetic_punch", "minimal_story", "hyper_neon"], help="Editing style preset")
-    parser.add_argument("--lang_mode", default="auto", choices=["auto", "to_en"], help="Language & Translation mode")
+    parser.add_argument("--lang_mode", default="auto", help="Language & Translation mode (auto, to_en, to_ml, to_hi, to_es, to_ta, to_ar)")
     parser.add_argument("--zoom-cuts", action=argparse.BooleanOptionalAction, default=True, help="Enable dynamic punch-in zoom cuts")
     parser.add_argument("--broll", action=argparse.BooleanOptionalAction, default=False, help="Enable automated cinematic B-roll inserts")
     parser.add_argument("--sfx", action=argparse.BooleanOptionalAction, default=False, help="Enable tone and context-aware sound effects")
